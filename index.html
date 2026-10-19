@@ -195,8 +195,7 @@
 </div>
 
 <script>
-    // MASUKKAN URL WEB APP GOOGLE APPS SCRIPT ANDA DI SINI
-    const API_URL = "https://script.google.com/macros/s/AKfycbw9hjCHqMMoxD0-wrlOKkB0DpAHpZYI8YNRrLsUnznniFDjXqeGY_N-qwiEiCEzcwcCww/exec";
+    const API_URL = "https://script.google.com/macros/s/AKfycbydjOsxHtWDKbUjMyz-dyaFUDQKW8vy5A8wCguvXpA1i6I3g40tF7rLByX-CgS5-K2vKg/exec";
 
     let activeUsername = '';
     let activeSessionId = '';
@@ -204,6 +203,13 @@
     let userRole = '';
     let statusInterval = null;
     let lastStatusBel = 'OPEN';
+
+    // FUNGSI PINTAR UNTUK MENYESUAIKAN NAMA KELOMPOK & MONITOR (Anti Mismatch)
+    function standarkanNamaKelompok(str) {
+        if (!str) return '';
+        let match = str.match(/\d+/);
+        return match ? ('Kelompok ' + match[0]) : str;
+    }
 
     function bunyikanSuaraBel(namaKelompok) {
         try {
@@ -223,7 +229,8 @@
                 'Kelompok 9': { f1: 680, f2: 1360 }
             };
 
-            const freq = mapNada[namaKelompok] || { f1: 380, f2: 760 };
+            const stdKelompok = standarkanNamaKelompok(namaKelompok);
+            const freq = mapNada[stdKelompok] || { f1: 380, f2: 760 };
             const duration = 1.25;
             const now = ctx.currentTime;
 
@@ -275,9 +282,6 @@
                         img.style.display = 'inline-block';
                     }
                 }
-            })
-            .catch(err => {
-                document.getElementById('loginTxtSekolah').innerText = 'Aplikasi Cerdas Cermat';
             });
     };
 
@@ -295,7 +299,7 @@
             if(res.success) {
                 activeUsername = res.username;
                 activeSessionId = res.sessionId;
-                currentGroup = res.namaKelompok;
+                currentGroup = res.namaKelompok || res.username;
                 userRole = res.role;
 
                 document.getElementById('loginCard').style.display = 'none';
@@ -311,18 +315,15 @@
                 if(res.urlLogo) {
                     document.getElementById('imgLogo').src = res.urlLogo;
                     document.getElementById('monitorImgLogo').src = res.urlLogo;
-                } else {
-                    document.getElementById('imgLogo').style.display = 'none';
-                    document.getElementById('monitorImgLogo').style.display = 'none';
                 }
 
                 if (userRole === 'MONITOR') {
                     document.getElementById('monitorCard').style.display = 'block';
-                    document.getElementById('monitorTxtKelompok').innerText = res.namaKelompok;
+                    document.getElementById('monitorTxtKelompok').innerText = standarkanNamaKelompok(currentGroup);
                 } else {
                     document.getElementById('headerBar').style.display = 'flex';
                     document.getElementById('appCard').style.display = 'block';
-                    document.getElementById('kelompokTitle').innerText = res.namaKelompok;
+                    document.getElementById('kelompokTitle').innerText = currentGroup;
 
                     if(userRole === 'ADMIN') {
                         document.getElementById('adminPanel').style.display = 'block';
@@ -332,9 +333,10 @@
                     }
                 }
 
-                // INTERVAL POLLING OPTIMAL: Admin & Peserta 1000ms, Monitor 2500ms
-                let intervalTime = (userRole === 'MONITOR') ? 2500 : 1000;
+                // HIGH-SPEED POLLING: 600ms untuk Admin & Peserta, 1500ms untuk Monitor
+                let intervalTime = (userRole === 'MONITOR') ? 1500 : 600;
                 statusInterval = setInterval(checkStatus, intervalTime);
+                checkStatus();
             } else {
                 document.getElementById('loginError').innerText = res.message;
             }
@@ -371,9 +373,16 @@
 
     function prosesTekanBel() {
         document.getElementById('tombolBel').disabled = true;
+        
+        // INSTANT RESPON DI LAYAR PENEL
+        const appBulb = document.getElementById('appBulb');
+        if(appBulb) appBulb.classList.add('on');
+
         fetch(API_URL, {
             method: 'POST',
-            body: JSON.stringify({ action: 'tekanBel', kelompok: currentGroup })
+            body: JSON.stringify({ action: 'tekanBel', kelompok: standarkanNamaKelompok(currentGroup) })
+        }).then(() => {
+            checkStatus(); // Panggil status langsung tanpa menunggu interval
         });
     }
 
@@ -387,19 +396,6 @@
                 return;
             }
 
-            if(res.namaSekolah) {
-                document.getElementById('txtNamaSekolah').innerText = res.namaSekolah;
-                document.getElementById('monitorTxtSekolah').innerText = res.namaSekolah;
-            }
-            if(res.namaKegiatan) {
-                document.getElementById('txtNamaKegiatan').innerText = res.namaKegiatan;
-                document.getElementById('monitorTxtKegiatan').innerText = res.namaKegiatan;
-            }
-            if(res.urlLogo) {
-                document.getElementById('imgLogo').src = res.urlLogo;
-                document.getElementById('monitorImgLogo').src = res.urlLogo;
-            }
-
             if (res.status === 'LOCKED' && lastStatusBel === 'OPEN') {
                 if (userRole === 'ADMIN') {
                     bunyikanSuaraBel(res.pemenang);
@@ -409,6 +405,9 @@
 
             const appBulb = document.getElementById('appBulb');
             const monitorBulb = document.getElementById('monitorBulb');
+
+            const stdUserKelompok = standarkanNamaKelompok(currentGroup);
+            const stdWinnerKelompok = standarkanNamaKelompok(res.pemenang);
 
             if (userRole !== 'MONITOR') {
                 const btn = document.getElementById('tombolBel');
@@ -422,7 +421,7 @@
                         statusBox.style.backgroundColor = '#fff3cd';
                         statusBox.style.color = '#856404';
                         if(appBulb) appBulb.classList.add('on');
-                    } else if (res.pemenang === currentGroup) {
+                    } else if (stdWinnerKelompok === stdUserKelompok) {
                         statusBox.innerText = '💡 ANDA MENEKAN BEL LEBIH DULU!';
                         statusBox.style.backgroundColor = '#d4edda';
                         statusBox.style.color = '#155724';
@@ -442,8 +441,9 @@
                 }
             }
 
+            // DUKUNGAN PENUH LAMPU MONITOR
             if (userRole === 'MONITOR') {
-                if (res.status === 'LOCKED' && res.pemenang === currentGroup) {
+                if (res.status === 'LOCKED' && stdWinnerKelompok === stdUserKelompok && stdUserKelompok !== '') {
                     if(monitorBulb) monitorBulb.classList.add('on');
                 } else {
                     if(monitorBulb) monitorBulb.classList.remove('on');
@@ -463,9 +463,11 @@
         const tbody = document.getElementById('tabelPoinAdmin');
         tbody.innerHTML = '';
 
+        const stdWinner = standarkanNamaKelompok(pemenangBel);
+
         dataPoin.forEach(item => {
             let tr = document.createElement('tr');
-            let isWinner = (statusBel === 'LOCKED' && item.nama === pemenangBel);
+            let isWinner = (statusBel === 'LOCKED' && standarkanNamaKelompok(item.nama) === stdWinner && stdWinner !== '');
 
             if (isWinner) {
                 tr.classList.add('row-winner');
@@ -485,7 +487,8 @@
     }
 
     function renderScoreboardMonitor(dataPoin) {
-        const item = dataPoin.find(x => x.nama === currentGroup);
+        const stdUser = standarkanNamaKelompok(currentGroup);
+        const item = dataPoin.find(x => standarkanNamaKelompok(x.nama) === stdUser);
         if(item) {
             document.getElementById('monitorTxtSkor').innerText = item.poin;
         }
@@ -495,7 +498,7 @@
         fetch(API_URL, {
             method: 'POST',
             body: JSON.stringify({ action: 'ubahPoin', kelompok: nama, delta: delta })
-        });
+        }).then(() => checkStatus());
     }
 
     function editSkorLangsung(nama, poinSekarang) {
@@ -506,9 +509,7 @@
                 fetch(API_URL, {
                     method: 'POST',
                     body: JSON.stringify({ action: 'setSkor', kelompok: nama, skorBaru: skorAngka })
-                });
-            } else {
-                alert('Silakan masukkan angka yang valid!');
+                }).then(() => checkStatus());
             }
         }
     }
@@ -517,7 +518,7 @@
         fetch(API_URL, {
             method: 'POST',
             body: JSON.stringify({ action: 'resetBel' })
-        });
+        }).then(() => checkStatus());
     }
 
     function prosesResetSemuaPoin() {
@@ -525,7 +526,7 @@
             fetch(API_URL, {
                 method: 'POST',
                 body: JSON.stringify({ action: 'resetSemuaPoin' })
-            });
+            }).then(() => checkStatus());
         }
     }
 </script>
