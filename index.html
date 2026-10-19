@@ -20,15 +20,15 @@
 
         .btn-logout { background-color: #6c757d; color: white; border: none; padding: 8px 14px; font-size: 13px; border-radius: 6px; cursor: pointer; }
         
-        /* HERO LOGIN */
+        /* LOGIN HERO */
         .login-hero { margin-bottom: 25px; padding-bottom: 15px; border-bottom: 2px solid #e9ecef; }
         .login-logo { max-height: 100px; margin-bottom: 12px; }
         .login-school-name { font-size: 22px; font-weight: bold; color: #2c3e50; margin: 0; }
         .login-event-name { font-size: 16px; font-weight: 600; color: #007bff; margin-top: 5px; }
 
-        /* INPUT & BUTTONS */
+        /* FORM INPUT */
         input[type="text"], input[type="password"] { padding: 12px; width: 85%; font-size: 16px; border: 1px solid #ccc; border-radius: 8px; margin-bottom: 12px; }
-        button { padding: 10px 16px; font-size: 15px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; transition: 0.2s; }
+        button { padding: 10px 16px; font-size: 15px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; transition: 0.15s; }
         
         .btn-login { background-color: #007bff; color: white; width: 85%; padding: 12px; margin-top: 5px; border-radius: 8px; font-size: 16px; }
         
@@ -55,7 +55,7 @@
         .test-audio-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }
         .btn-test-sound { background-color: #17a2b8; color: white; border: none; padding: 6px; font-size: 11px; border-radius: 4px; cursor: pointer; }
 
-        /* ANIMASI LAMPU PIJAR */
+        /* ANIMASI LAMPU PIJAR VISUAL */
         .bulb-box { margin: 15px 0; }
         .bulb-icon {
             width: 90px;
@@ -66,14 +66,14 @@
             font-size: 50px;
             line-height: 90px;
             display: inline-block;
-            transition: all 0.3s ease;
+            transition: all 0.1s ease;
             box-shadow: inset 0 0 15px rgba(0,0,0,0.5);
         }
         .bulb-icon.on {
             background-color: #ffee55;
             color: #d35400;
             box-shadow: 0 0 35px #ffeb3b, 0 0 70px #ff9800, 0 0 100px #ff5722;
-            animation: bulb-pulse 0.7s infinite alternate;
+            animation: bulb-pulse 0.4s infinite alternate;
         }
         @keyframes bulb-pulse {
             from { transform: scale(1); box-shadow: 0 0 30px #ffeb3b, 0 0 60px #ff9800; }
@@ -97,7 +97,7 @@
 
 <div class="container">
 
-    <!-- HEADER SEKOALH & LOGOUT -->
+    <!-- HEADER SEKOLAH & LOGOUT -->
     <div id="headerBar" class="header-bar" style="display:none;">
         <div class="school-header">
             <img id="imgLogo" class="school-logo" src="" alt="Logo">
@@ -201,24 +201,22 @@
 </div>
 
 <script>
-    // URL WEB APP GOOGLE APPS SCRIPT
-    const API_URL = "https://script.google.com/macros/s/AKfycbw9hjCHqMMoxD0-wrlOKkB0DpAHpZYI8YNRrLsUnznniFDjXqeGY_N-qwiEiCEzcwcCww/exec";
+    const API_URL = "https://script.google.com/macros/s/AKfycbydjOsxHtWDKbUjMyz-dyaFUDQKW8vy5A8wCguvXpA1i6I3g40tF7rLByX-CgS5-K2vKg/exec";
 
     let activeUsername = '';
     let activeSessionId = '';
     let currentGroup = '';
     let userRole = '';
-    let statusInterval = null;
+    let pollTimer = null;
+    let isPollingActive = false;
     let lastStatusBel = 'OPEN';
 
-    // FUNGSI STANDARISASI NAMA KELOMPOK (Anti Mismatch)
     function standarkanNamaKelompok(str) {
         if (!str) return '';
         let match = str.match(/\d+/);
         return match ? ('Kelompok ' + match[0]) : str;
     }
 
-    // PEMUTAR SUARA BEL "TEEEEEET" KHAS KUIS DENGAN FREKUENSI BERBEDA PER KELOMPOK
     function bunyikanSuaraBel(namaKelompok) {
         try {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -273,13 +271,12 @@
             osc2.stop(now + duration);
 
         } catch (e) {
-            console.log('Audio tidak didukung oleh browser:', e);
+            console.log('Audio error:', e);
         }
     }
 
-    // PEMUATAN DATA AWAL SAAT HALAMAN DIBUKA
     window.onload = function() {
-        fetch(API_URL + '?action=getConfig')
+        fetch(API_URL + '?action=getConfig&_t=' + Date.now())
             .then(res => res.json())
             .then(config => {
                 if(config) {
@@ -293,7 +290,6 @@
                 }
             })
             .catch(err => {
-                console.log("Koneksi awal lambat, menggunakan fallback bawaan:", err);
                 document.getElementById('loginTxtSekolah').innerText = 'SMP NEGERI 1 KANDAT';
                 document.getElementById('loginTxtKegiatan').innerText = 'CERDAS CERMAT';
             });
@@ -347,21 +343,21 @@
                     }
                 }
 
-                // POLLING BERKALA: 600ms untuk Admin & Peserta, 1500ms untuk Monitor
-                let intervalTime = (userRole === 'MONITOR') ? 1500 : 600;
-                statusInterval = setInterval(checkStatus, intervalTime);
-                checkStatus();
+                // MULAI POLLING MICRO-INTERVAL (250 ms BERURUTAN)
+                isPollingActive = true;
+                startMicroPolling();
             } else {
                 document.getElementById('loginError').innerText = res.message;
             }
         })
         .catch(err => {
-            document.getElementById('loginError').innerText = 'Gagal terhubung ke server. Periksa koneksi internet Anda.';
+            document.getElementById('loginError').innerText = 'Gagal terhubung ke server.';
         });
     }
 
     function logout() {
-        if (statusInterval) clearInterval(statusInterval);
+        isPollingActive = false;
+        if (pollTimer) clearTimeout(pollTimer);
         
         fetch(API_URL, {
             method: 'POST',
@@ -388,23 +384,45 @@
         document.getElementById('loginCard').style.display = 'block';
     }
 
+    // PROSES TEKAN BEL DENGAN "OPTIMISTIC UI UPDATE" (RESPON INSTAN 0 MILIDETIK)
     function prosesTekanBel() {
-        document.getElementById('tombolBel').disabled = true;
-        
-        // RESPONS INSTAN PADA LAYAR
+        const btn = document.getElementById('tombolBel');
+        const statusBox = document.getElementById('statusBox');
         const appBulb = document.getElementById('appBulb');
-        if(appBulb) appBulb.classList.add('on');
 
+        // 1. UBAH TAMPILAN SECARA INSTAN TANPA MENUNGGU SERVER
+        btn.disabled = true;
+        if(appBulb) appBulb.classList.add('on');
+        statusBox.innerText = '💡 MENIKAM BEL...';
+        statusBox.style.backgroundColor = '#d4edda';
+        statusBox.style.color = '#155724';
+
+        // 2. KIRIM PERINTAH KE SERVER
         fetch(API_URL, {
             method: 'POST',
             body: JSON.stringify({ action: 'tekanBel', kelompok: standarkanNamaKelompok(currentGroup) })
         }).then(() => {
-            checkStatus();
+            triggerInstantCheck();
         });
     }
 
-    function checkStatus() {
-        fetch(`${API_URL}?action=getStatus&username=${encodeURIComponent(activeUsername)}&sessionId=${encodeURIComponent(activeSessionId)}`)
+    // FUNGSI POLLING KONTINU (SECEPAT 250 MS)
+    function startMicroPolling() {
+        if (!isPollingActive) return;
+
+        checkStatus(() => {
+            if (isPollingActive) {
+                pollTimer = setTimeout(startMicroPolling, 250); // Delay 250ms setelah request selesai
+            }
+        });
+    }
+
+    function triggerInstantCheck() {
+        checkStatus(null);
+    }
+
+    function checkStatus(callback) {
+        fetch(`${API_URL}?action=getStatus&username=${encodeURIComponent(activeUsername)}&sessionId=${encodeURIComponent(activeSessionId)}&_t=${Date.now()}`)
         .then(res => res.json())
         .then(res => {
             if (!res.sessionValid) {
@@ -458,7 +476,7 @@
                 }
             }
 
-            // DUKUNGAN LAMPU MONITOR SKOR
+            // RESPON LAMPU MONITOR SKOR (SANGAT CEPAT)
             if (userRole === 'MONITOR') {
                 if (res.status === 'LOCKED' && stdWinnerKelompok === stdUserKelompok && stdUserKelompok !== '') {
                     if(monitorBulb) monitorBulb.classList.add('on');
@@ -473,9 +491,10 @@
                 renderScoreboardMonitor(res.daftarPoin);
             }
 
+            if (callback) callback();
         })
         .catch(err => {
-            console.log("Gagal melakukan polling status:", err);
+            if (callback) callback();
         });
     }
 
@@ -518,7 +537,7 @@
         fetch(API_URL, {
             method: 'POST',
             body: JSON.stringify({ action: 'ubahPoin', kelompok: nama, delta: delta })
-        }).then(() => checkStatus());
+        }).then(() => triggerInstantCheck());
     }
 
     function editSkorLangsung(nama, poinSekarang) {
@@ -529,7 +548,7 @@
                 fetch(API_URL, {
                     method: 'POST',
                     body: JSON.stringify({ action: 'setSkor', kelompok: nama, skorBaru: skorAngka })
-                }).then(() => checkStatus());
+                }).then(() => triggerInstantCheck());
             }
         }
     }
@@ -538,7 +557,7 @@
         fetch(API_URL, {
             method: 'POST',
             body: JSON.stringify({ action: 'resetBel' })
-        }).then(() => checkStatus());
+        }).then(() => triggerInstantCheck());
     }
 
     function prosesResetSemuaPoin() {
@@ -546,7 +565,7 @@
             fetch(API_URL, {
                 method: 'POST',
                 body: JSON.stringify({ action: 'resetSemuaPoin' })
-            }).then(() => checkStatus());
+            }).then(() => triggerInstantCheck());
         }
     }
 </script>
