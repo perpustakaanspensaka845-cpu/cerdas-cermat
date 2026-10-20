@@ -118,7 +118,7 @@
         </div>
 
         <p style="color:#6c757d; margin-bottom: 20px;">Masukkan Username dan Password Anda</p>
-        <input type="text" id="usernameInput" placeholder="Username (misal: kelompok1 / monitor1 / admin)">
+        <input type="text" id="usernameInput" placeholder="Username (misal: satu / monitor1 / admin)">
         <br>
         <input type="password" id="passwordInput" placeholder="Password">
         <br>
@@ -192,7 +192,7 @@
 </div>
 
 <script>
-    const API_URL = "https://script.google.com/macros/s/AKfycbw9hjCHqMMoxD0-wrlOKkB0DpAHpZYI8YNRrLsUnznniFDjXqeGY_N-qwiEiCEzcwcCww/exec";
+    const API_URL = "https://script.google.com/macros/s/AKfycbydjOsxHtWDKbUjMyz-dyaFUDQKW8vy5A8wCguvXpA1i6I3g40tF7rLByX-CgS5-K2vKg/exec";
 
     let activeUsername = '';
     let activeSessionId = '';
@@ -203,23 +203,41 @@
     let isPollingActive = false;
     let lastStatusBel = 'OPEN';
 
+    // AKTIVASI AUDIOCONTEXT PADA KLIK PERTAMA LAYAR
+    document.addEventListener('click', function() {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (AudioContext) {
+            if (!window.globalAudioCtx) {
+                window.globalAudioCtx = new AudioContext();
+            }
+            if (window.globalAudioCtx.state === 'suspended') {
+                window.globalAudioCtx.resume();
+            }
+        }
+    }, { once: true });
+
     function bunyikanSuaraBel(groupIndex) {
         try {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             if (!AudioContext) return;
-            const ctx = new AudioContext();
+            if (!window.globalAudioCtx) {
+                window.globalAudioCtx = new AudioContext();
+            }
+            const ctx = window.globalAudioCtx;
+            if (ctx.state === 'suspended') {
+                ctx.resume();
+            }
 
-            // Frekuensi nada unik dari Kelompok 1 - 9
             const frekuensiMap = [
-                { f1: 280, f2: 560 }, // K1
-                { f1: 330, f2: 660 }, // K2
-                { f1: 380, f2: 760 }, // K3
-                { f1: 430, f2: 860 }, // K4
-                { f1: 480, f2: 960 }, // K5
-                { f1: 530, f2: 1060 },// K6
-                { f1: 580, f2: 1160 },// K7
-                { f1: 630, f2: 1260 },// K8
-                { f1: 680, f2: 1360 } // K9
+                { f1: 280, f2: 560 },
+                { f1: 330, f2: 660 },
+                { f1: 380, f2: 760 },
+                { f1: 430, f2: 860 },
+                { f1: 480, f2: 960 },
+                { f1: 530, f2: 1060 },
+                { f1: 580, f2: 1160 },
+                { f1: 630, f2: 1260 },
+                { f1: 680, f2: 1360 }
             ];
 
             const idx = Math.max(0, Math.min(8, (parseInt(groupIndex, 10) || 1) - 1));
@@ -371,6 +389,7 @@
         document.getElementById('loginCard').style.display = 'block';
     }
 
+    // TEKAN BEL DENGAN SUARA LOKAL INSTAN (0 MILIDETIK)
     function prosesTekanBel() {
         const btn = document.getElementById('tombolBel');
         const statusBox = document.getElementById('statusBox');
@@ -382,6 +401,10 @@
         statusBox.style.backgroundColor = '#d4edda';
         statusBox.style.color = '#155724';
 
+        // 1. BUNYIKAN SUARA LANGSUNG DI HP PESERTA
+        bunyikanSuaraBel(userGroupIndex);
+
+        // 2. KIRIM PERINTAH KE SERVER
         fetch(API_URL, {
             method: 'POST',
             body: JSON.stringify({ action: 'tekanBel', kelompok: currentGroup, groupIndex: userGroupIndex })
@@ -456,7 +479,6 @@
                 }
             }
 
-            // RESPON LAMPU MONITOR SKOR DENGAN PEMADANAN INDEKS & NAMA
             if (userRole === 'MONITOR') {
                 const myGroup = res.daftarPoin.find(x => x.index === userGroupIndex);
                 if (myGroup) {
