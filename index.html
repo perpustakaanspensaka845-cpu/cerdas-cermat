@@ -147,16 +147,7 @@
                 </div>
                 
                 <div style="font-size:12px; font-weight:bold; color:#495057; margin-top:10px; text-align:left;">🔊 Tes Suara Nada Bel Tiap Kelompok:</div>
-                <div class="test-audio-grid">
-                    <button class="btn-test-sound" onclick="bunyikanSuaraBel('Kelompok 1')">🔔 K1 (Bass)</button>
-                    <button class="btn-test-sound" onclick="bunyikanSuaraBel('Kelompok 2')">🔔 K2</button>
-                    <button class="btn-test-sound" onclick="bunyikanSuaraBel('Kelompok 3')">🔔 K3</button>
-                    <button class="btn-test-sound" onclick="bunyikanSuaraBel('Kelompok 4')">🔔 K4</button>
-                    <button class="btn-test-sound" onclick="bunyikanSuaraBel('Kelompok 5')">🔔 K5</button>
-                    <button class="btn-test-sound" onclick="bunyikanSuaraBel('Kelompok 6')">🔔 K6</button>
-                    <button class="btn-test-sound" onclick="bunyikanSuaraBel('Kelompok 7')">🔔 K7</button>
-                    <button class="btn-test-sound" onclick="bunyikanSuaraBel('Kelompok 8')">🔔 K8</button>
-                    <button class="btn-test-sound" onclick="bunyikanSuaraBel('Kelompok 9')">🔔 K9 (Treble)</button>
+                <div class="test-audio-grid" id="testAudioGrid">
                 </div>
             </div>
         </div>
@@ -206,37 +197,33 @@
     let activeUsername = '';
     let activeSessionId = '';
     let currentGroup = '';
+    let userGroupIndex = 1;
     let userRole = '';
     let pollTimer = null;
     let isPollingActive = false;
     let lastStatusBel = 'OPEN';
 
-    function standarkanNamaKelompok(str) {
-        if (!str) return '';
-        let match = str.match(/\d+/);
-        return match ? ('Kelompok ' + match[0]) : str;
-    }
-
-    function bunyikanSuaraBel(namaKelompok) {
+    function bunyikanSuaraBel(groupIndex) {
         try {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             if (!AudioContext) return;
             const ctx = new AudioContext();
 
-            const mapNada = {
-                'Kelompok 1': { f1: 280, f2: 560 },
-                'Kelompok 2': { f1: 330, f2: 660 },
-                'Kelompok 3': { f1: 380, f2: 760 },
-                'Kelompok 4': { f1: 430, f2: 860 },
-                'Kelompok 5': { f1: 480, f2: 960 },
-                'Kelompok 6': { f1: 530, f2: 1060 },
-                'Kelompok 7': { f1: 580, f2: 1160 },
-                'Kelompok 8': { f1: 630, f2: 1260 },
-                'Kelompok 9': { f1: 680, f2: 1360 }
-            };
+            // Frekuensi nada unik dari Kelompok 1 - 9
+            const frekuensiMap = [
+                { f1: 280, f2: 560 }, // K1
+                { f1: 330, f2: 660 }, // K2
+                { f1: 380, f2: 760 }, // K3
+                { f1: 430, f2: 860 }, // K4
+                { f1: 480, f2: 960 }, // K5
+                { f1: 530, f2: 1060 },// K6
+                { f1: 580, f2: 1160 },// K7
+                { f1: 630, f2: 1260 },// K8
+                { f1: 680, f2: 1360 } // K9
+            ];
 
-            const stdKelompok = standarkanNamaKelompok(namaKelompok);
-            const freq = mapNada[stdKelompok] || { f1: 380, f2: 760 };
+            const idx = Math.max(0, Math.min(8, (parseInt(groupIndex, 10) || 1) - 1));
+            const freq = frekuensiMap[idx];
             const duration = 1.25;
             const now = ctx.currentTime;
 
@@ -309,7 +296,8 @@
             if(res.success) {
                 activeUsername = res.username;
                 activeSessionId = res.sessionId;
-                currentGroup = res.namaKelompok || res.username;
+                currentGroup = res.namaKelompok;
+                userGroupIndex = res.groupIndex || 1;
                 userRole = res.role;
 
                 document.getElementById('loginCard').style.display = 'none';
@@ -329,7 +317,7 @@
 
                 if (userRole === 'MONITOR') {
                     document.getElementById('monitorCard').style.display = 'block';
-                    document.getElementById('monitorTxtKelompok').innerText = standarkanNamaKelompok(currentGroup);
+                    document.getElementById('monitorTxtKelompok').innerText = currentGroup;
                 } else {
                     document.getElementById('headerBar').style.display = 'flex';
                     document.getElementById('appCard').style.display = 'block';
@@ -343,7 +331,6 @@
                     }
                 }
 
-                // MULAI POLLING MICRO-INTERVAL (250 ms BERURUTAN)
                 isPollingActive = true;
                 startMicroPolling();
             } else {
@@ -384,35 +371,31 @@
         document.getElementById('loginCard').style.display = 'block';
     }
 
-    // PROSES TEKAN BEL DENGAN "OPTIMISTIC UI UPDATE" (RESPON INSTAN 0 MILIDETIK)
     function prosesTekanBel() {
         const btn = document.getElementById('tombolBel');
         const statusBox = document.getElementById('statusBox');
         const appBulb = document.getElementById('appBulb');
 
-        // 1. UBAH TAMPILAN SECARA INSTAN TANPA MENUNGGU SERVER
         btn.disabled = true;
         if(appBulb) appBulb.classList.add('on');
-        statusBox.innerText = '💡 MENIKAM BEL...';
+        statusBox.innerText = '💡 MENEKAN BEL...';
         statusBox.style.backgroundColor = '#d4edda';
         statusBox.style.color = '#155724';
 
-        // 2. KIRIM PERINTAH KE SERVER
         fetch(API_URL, {
             method: 'POST',
-            body: JSON.stringify({ action: 'tekanBel', kelompok: standarkanNamaKelompok(currentGroup) })
+            body: JSON.stringify({ action: 'tekanBel', kelompok: currentGroup, groupIndex: userGroupIndex })
         }).then(() => {
             triggerInstantCheck();
         });
     }
 
-    // FUNGSI POLLING KONTINU (SECEPAT 250 MS)
     function startMicroPolling() {
         if (!isPollingActive) return;
 
         checkStatus(() => {
             if (isPollingActive) {
-                pollTimer = setTimeout(startMicroPolling, 250); // Delay 250ms setelah request selesai
+                pollTimer = setTimeout(startMicroPolling, 250);
             }
         });
     }
@@ -433,16 +416,13 @@
 
             if (res.status === 'LOCKED' && lastStatusBel === 'OPEN') {
                 if (userRole === 'ADMIN') {
-                    bunyikanSuaraBel(res.pemenang);
+                    bunyikanSuaraBel(res.pemenangIndex);
                 }
             }
             lastStatusBel = res.status;
 
             const appBulb = document.getElementById('appBulb');
             const monitorBulb = document.getElementById('monitorBulb');
-
-            const stdUserKelompok = standarkanNamaKelompok(currentGroup);
-            const stdWinnerKelompok = standarkanNamaKelompok(res.pemenang);
 
             if (userRole !== 'MONITOR') {
                 const btn = document.getElementById('tombolBel');
@@ -456,7 +436,7 @@
                         statusBox.style.backgroundColor = '#fff3cd';
                         statusBox.style.color = '#856404';
                         if(appBulb) appBulb.classList.add('on');
-                    } else if (stdWinnerKelompok === stdUserKelompok) {
+                    } else if (res.pemenangIndex === userGroupIndex || res.pemenang === currentGroup) {
                         statusBox.innerText = '💡 ANDA MENEKAN BEL LEBIH DULU!';
                         statusBox.style.backgroundColor = '#d4edda';
                         statusBox.style.color = '#155724';
@@ -476,9 +456,14 @@
                 }
             }
 
-            // RESPON LAMPU MONITOR SKOR (SANGAT CEPAT)
+            // RESPON LAMPU MONITOR SKOR DENGAN PEMADANAN INDEKS & NAMA
             if (userRole === 'MONITOR') {
-                if (res.status === 'LOCKED' && stdWinnerKelompok === stdUserKelompok && stdUserKelompok !== '') {
+                const myGroup = res.daftarPoin.find(x => x.index === userGroupIndex);
+                if (myGroup) {
+                    document.getElementById('monitorTxtKelompok').innerText = myGroup.nama;
+                }
+
+                if (res.status === 'LOCKED' && res.pemenangIndex === userGroupIndex) {
                     if(monitorBulb) monitorBulb.classList.add('on');
                 } else {
                     if(monitorBulb) monitorBulb.classList.remove('on');
@@ -486,7 +471,7 @@
             }
 
             if (userRole === 'ADMIN') {
-                renderScoreboardAdmin(res.daftarPoin, res.status, res.pemenang);
+                renderScoreboardAdmin(res.daftarPoin, res.status, res.pemenangIndex);
             } else if (userRole === 'MONITOR') {
                 renderScoreboardMonitor(res.daftarPoin);
             }
@@ -498,15 +483,25 @@
         });
     }
 
-    function renderScoreboardAdmin(dataPoin, statusBel, pemenangBel) {
+    function renderScoreboardAdmin(dataPoin, statusBel, winnerIndex) {
         const tbody = document.getElementById('tabelPoinAdmin');
         tbody.innerHTML = '';
 
-        const stdWinner = standarkanNamaKelompok(pemenangBel);
+        const audioGrid = document.getElementById('testAudioGrid');
+        if (audioGrid && audioGrid.children.length !== dataPoin.length) {
+            audioGrid.innerHTML = '';
+            dataPoin.forEach(item => {
+                let btnSound = document.createElement('button');
+                btnSound.className = 'btn-test-sound';
+                btnSound.innerHTML = `🔔 ${item.nama}`;
+                btnSound.onclick = () => bunyikanSuaraBel(item.index);
+                audioGrid.appendChild(btnSound);
+            });
+        }
 
         dataPoin.forEach(item => {
             let tr = document.createElement('tr');
-            let isWinner = (statusBel === 'LOCKED' && standarkanNamaKelompok(item.nama) === stdWinner && stdWinner !== '');
+            let isWinner = (statusBel === 'LOCKED' && item.index === winnerIndex);
 
             if (isWinner) {
                 tr.classList.add('row-winner');
@@ -515,39 +510,38 @@
             tr.innerHTML = `<td><b>${item.nama}</b> ${isWinner ? '💡 <span style="color:#d35400;">(MENEKAN BEL!)</span>' : ''}</td>
                             <td class="poin-val">${item.poin}</td>
                             <td style="text-align:right; white-space:nowrap;">
-                                <button class="btn-plus" onclick="koreksiPoin('${item.nama}', 100)">+100</button>
-                                <button class="btn-plus" onclick="koreksiPoin('${item.nama}', 10)">+10</button>
-                                <button class="btn-minus" onclick="koreksiPoin('${item.nama}', -10)">-10</button>
-                                <button class="btn-minus" onclick="koreksiPoin('${item.nama}', -100)">-100</button>
-                                <button class="btn-edit" onclick="editSkorLangsung('${item.nama}', ${item.poin})">✏️ Edit</button>
+                                <button class="btn-plus" onclick="koreksiPoin('${item.nama}', ${item.index}, 100)">+100</button>
+                                <button class="btn-plus" onclick="koreksiPoin('${item.nama}', ${item.index}, 10)">+10</button>
+                                <button class="btn-minus" onclick="koreksiPoin('${item.nama}', ${item.index}, -10)">-10</button>
+                                <button class="btn-minus" onclick="koreksiPoin('${item.nama}', ${item.index}, -100)">-100</button>
+                                <button class="btn-edit" onclick="editSkorLangsung('${item.nama}', ${item.index}, ${item.poin})">✏️ Edit</button>
                             </td>`;
             tbody.appendChild(tr);
         });
     }
 
     function renderScoreboardMonitor(dataPoin) {
-        const stdUser = standarkanNamaKelompok(currentGroup);
-        const item = dataPoin.find(x => standarkanNamaKelompok(x.nama) === stdUser);
+        const item = dataPoin.find(x => x.index === userGroupIndex);
         if(item) {
             document.getElementById('monitorTxtSkor').innerText = item.poin;
         }
     }
 
-    function koreksiPoin(nama, delta) {
+    function koreksiPoin(nama, groupIndex, delta) {
         fetch(API_URL, {
             method: 'POST',
-            body: JSON.stringify({ action: 'ubahPoin', kelompok: nama, delta: delta })
+            body: JSON.stringify({ action: 'ubahPoin', kelompok: nama, groupIndex: groupIndex, delta: delta })
         }).then(() => triggerInstantCheck());
     }
 
-    function editSkorLangsung(nama, poinSekarang) {
+    function editSkorLangsung(nama, groupIndex, poinSekarang) {
         let inputBaru = prompt(`Masukkan nilai/skor baru untuk ${nama}:`, poinSekarang);
         if (inputBaru !== null && inputBaru.trim() !== '') {
             let skorAngka = parseInt(inputBaru.trim(), 10);
             if (!isNaN(skorAngka)) {
                 fetch(API_URL, {
                     method: 'POST',
-                    body: JSON.stringify({ action: 'setSkor', kelompok: nama, skorBaru: skorAngka })
+                    body: JSON.stringify({ action: 'setSkor', kelompok: nama, groupIndex: groupIndex, skorBaru: skorAngka })
                 }).then(() => triggerInstantCheck());
             }
         }
